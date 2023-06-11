@@ -4,7 +4,7 @@
 ***
 
 目前项目进度：
--[ ] MapReduce
+- [ ] MapReduce
 
 ***
 ## lab 1. 实现MapReduce
