@@ -1,0 +1,4 @@
+*** Starting wc test.
+Worker get  0 Task :Id[ 0 ]
+Worker get  0 Task :Id[ 2 ]
+Worker get  0 Task :Id[ 1 ]

@@ -1,7 +1,7 @@
 /*
  * @Author: ZeroOneTaT
  * @Date: 2023-06-11 13:42:53
- * @LastEditTime: 2023-06-12 19:13:19
+ * @LastEditTime: 2023-06-13 23:46:52
  * @FilePath: /MIT-6.824/src/mr/worker.go
  * @Description: Woker 实现
  *
@@ -17,7 +17,6 @@ import (
 	"log"
 	"net/rpc"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
@@ -130,7 +129,7 @@ func DoMapTask(mapf func(string, string) []KeyValue, response *Task) {
 	// Reducer 数量
 	n_reduce := response.ReducerNum
 
-	// 创建 num_red 长度的切片
+	// 创建 n_reduce 长度的切片
 	hashkv := make([][]KeyValue, n_reduce)
 
 	// 哈希映射, 保证相同的 key 分配到相同的 Reducer
@@ -138,25 +137,41 @@ func DoMapTask(mapf func(string, string) []KeyValue, response *Task) {
 		hashkv[ihash(kv.Key)%n_reduce] = append(hashkv[ihash(kv.Key)%n_reduce], kv)
 	}
 
-	// 使用临时文件, 使用json编码，防止进程由于某些原因退出了，产生不完整的文件
-	tmpFiles := make([]*os.File, n_reduce)
+	// // 使用临时文件, 使用json编码，防止进程由于某些原因退出了，产生不完整的文件
+	// tmpFiles := make([]*os.File, n_reduce)
+	// for i := 0; i < n_reduce; i++ {
+	// 	// tmpFiles[i], _ = ioutil.TempFile("mr-tmp", "mr-tmp-*")
+	// 	tmpFiles[i], _ = ioutil.TempFile("mr-tmp", "mr-tmp-*")
+	// 	encoder := json.NewEncoder(tmpFiles[i])
+	// 	for _, kv := range hashkv[i] {
+	// 		log.Fatalln(kv)
+	// 		err := encoder.Encode(kv)
+	// 		if err != nil {
+	// 			log.Fatal("Failed to encoder mapfile ", err)
+	// 		}
+	// 	}
+
+	// }
+	// // 写入最终的中间文件
+	// for outindex, file := range tmpFiles {
+	// 	outname := "mr-out-" + strconv.Itoa(response.TaskId) + "-" + strconv.Itoa(outindex)
+	// 	tmppath := filepath.Join(file.Name())
+	// 	os.Rename(tmppath, outname)
+	// 	// file.Close()
+	// }
+
 	for i := 0; i < n_reduce; i++ {
-		tmpFiles[i], _ = ioutil.TempFile("mr-tmp", "mr-tmp-*")
-		encoder := json.NewEncoder(tmpFiles[i])
+		oname := "mr-tmp-" + strconv.Itoa(response.TaskId) + "-" + strconv.Itoa(i)
+		ofile, _ := os.Create(oname)
+		enc := json.NewEncoder(ofile)
 		for _, kv := range hashkv[i] {
-			err := encoder.Encode(kv)
+			err := enc.Encode(kv)
 			if err != nil {
-				log.Fatal("Failed to encoder mapfile", err)
+				log.Fatal("Failed to encoder mapfile ", err)
+				return
 			}
 		}
-		// tmpFiles[i].Close()
-	}
-	// 写入最终的中间文件
-	for outindex, file := range tmpFiles {
-		outname := "mr-out-" + strconv.Itoa(response.TaskId) + "-" + strconv.Itoa(outindex)
-		tmppath := filepath.Join(file.Name())
-		os.Rename(tmppath, outname)
-		file.Close()
+		ofile.Close()
 	}
 }
 
@@ -170,8 +185,8 @@ func DoReduceTask(reducef func(string, []string) string, response *Task) {
 	n_reduce_file := response.TaskId
 	// 对传入的 KeyValue 进行 json 解码并排序
 	intermediate := shuffle(response.FileSlice)
-	// dir, _ := os.Getwd()
-	tmpFile, err := ioutil.TempFile("mr-tmp", "mr-tmp-*")
+	dir, _ := os.Getwd()
+	tmpFile, err := ioutil.TempFile(dir, "mr-tmp-*")
 	if err != nil {
 		log.Fatal("Failed to create temp file", err)
 	}
@@ -245,7 +260,8 @@ func callDone(finish *Task) Task {
 	ok := call("Coordinator.MarkFinished", &args, &reply)
 
 	if ok {
-		fmt.Println("Worker finish :taskId[", args.TaskId, "]")
+		log.Fatalln("Worker finish :taskId[", args.TaskId, "]")
+		// fmt.Println("Worker finish :taskId[", args.TaskId, "]")
 	} else {
 		fmt.Println("RPC call failed!")
 	}
@@ -284,7 +300,7 @@ func CallExample() {
 // usually returns true.
 // returns false if something goes wrong.
 func call(rpcname string, args interface{}, reply interface{}) bool {
-	// c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
+	// c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":9906")
 	sockname := coordinatorSock()
 	c, err := rpc.DialHTTP("unix", sockname)
 	if err != nil {

@@ -1,7 +1,7 @@
 /*
  * @Author: ZeroOneTaT
  * @Date: 2023-06-11 13:42:53
- * @LastEditTime: 2023-06-13 22:05:35
+ * @LastEditTime: 2023-06-14 13:04:22
  * @FilePath: /MIT-6.824/src/mr/coordinator.go
  * @Description: Coordinator
  *
@@ -10,14 +10,12 @@
 package mr
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/rpc"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,7 +65,7 @@ func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
 func (c *Coordinator) server() {
 	rpc.Register(c)
 	rpc.HandleHTTP()
-	//l, e := net.Listen("tcp", ":1234")
+	// l, e := net.Listen("tcp", ":9906")
 	sockname := coordinatorSock()
 	os.Remove(sockname)
 	l, e := net.Listen("unix", sockname)
@@ -87,7 +85,7 @@ func (c *Coordinator) Done() bool {
 	mu.Lock()
 	defer mu.Unlock()
 	if c.DistPhase == AllDone {
-		fmt.Printf("All tasks are finished,the coordinator will be exit! !")
+		log.Printf("All tasks are finished,the coordinator will be exit! !")
 		return true
 	} else {
 		return false
@@ -147,11 +145,11 @@ func (c *Coordinator) CrashDetector() {
 		for _, v := range c.TaskMeta.MetaMap {
 			// 正常工作状态
 			if v.TaskState == Working {
-				fmt.Println("task[", v.TaskAdr.TaskId, "] is working: ", time.Since(v.StartTime), "s")
+				log.Println("task[", v.TaskAdr.TaskId, "] is working: ", time.Since(v.StartTime), "s")
 			}
 			// 任务超时，超时时间：10 s
 			if v.TaskState == Working && time.Since(v.StartTime) > time.Second*10 {
-				fmt.Printf("the task[ %d ] is crash,take [%d] s\n", v.TaskAdr.TaskId, time.Since(v.StartTime))
+				log.Printf("the task[ %d ] is crash,take [%d] s\n", v.TaskAdr.TaskId, time.Since(v.StartTime))
 
 				// 加入对应的任务队列等待重新调度
 				switch v.TaskAdr.TaskType {
@@ -269,13 +267,13 @@ func selectReduceName(reduceId int) []string {
 	var files []string
 
 	// 获取中间文件目录下的所有文件
-	wd, _ := os.Getwd()
-	path := filepath.Join(wd, "mr-tmp")
+	path, _ := os.Getwd()
+	// path := filepath.Join(wd, "mr-tmp")
 	allfiles, _ := ioutil.ReadDir(path)
 
 	// 将对应的中间文件添加进来
 	for _, file := range allfiles {
-		if strings.HasPrefix(file.Name(), "mr-out-") && strings.HasSuffix(file.Name(), strconv.Itoa((reduceId))) {
+		if strings.HasPrefix(file.Name(), "mr-tmp-") && strings.HasSuffix(file.Name(), strconv.Itoa((reduceId))) {
 			files = append(files, file.Name())
 		}
 	}
@@ -304,10 +302,11 @@ func (c *Coordinator) PollTask(args *TaskArgs, reply *Task) error {
 			// 存在可用Map任务，从 c.MapTaskChannel 取出一个返回
 			if len(c.MapTaskChannel) > 0 {
 				*reply = *<-c.MapTaskChannel
-				fmt.Printf("poll-Map-taskid[ %d ]\n", reply.TaskId)
+				log.Printf("poll-Map-taskid[ %d ]\n", reply.TaskId)
+				// fmt.Printf("poll-Map-taskid[ %d ]\n", reply.TaskId)
 				// 如果该任务当前正在运行，则打印一条消息
 				if !c.TaskMeta.judgeState(reply.TaskId) {
-					fmt.Printf("Map-taskid[ %d ] is running\n", reply.TaskId)
+					log.Printf("Map-taskid[ %d ] is running\n", reply.TaskId)
 				}
 			} else {
 				// 不存在可用Map任务，返回  WaittingTask
@@ -323,10 +322,11 @@ func (c *Coordinator) PollTask(args *TaskArgs, reply *Task) error {
 		{
 			if len(c.ReduceTaskChannel) > 0 {
 				*reply = *<-c.ReduceTaskChannel
-				fmt.Printf("poll-Reduce-taskid[ %d ]\n", reply.TaskId)
+				log.Printf("poll-Reduce-taskid[ %d ]\n", reply.TaskId)
+				// fmt.Printf("poll-Reduce-taskid[ %d ]\n", reply.TaskId)
 				// 如果该任务当前正在运行，则打印一条消息
 				if !c.TaskMeta.judgeState(reply.TaskId) {
-					fmt.Printf("Reduce-taskid[ %d ] is running\n", reply.TaskId)
+					log.Printf("Reduce-taskid[ %d ] is running\n", reply.TaskId)
 				}
 			} else {
 				// 如果没有可用的 Reduce 任务，返回 WaittingTask
@@ -436,7 +436,7 @@ func (c *Coordinator) MarkFinished(args *Task, reply *Task) error {
 			if ok && meta.TaskState == Working {
 				meta.TaskState = Done
 			} else {
-				fmt.Printf("Map task Id[%d] is finished,already ! ! !\n", args.TaskId)
+				log.Printf("Map task Id[%d] is finished,already ! ! !\n", args.TaskId)
 			}
 		}
 	case ReduceTask:
@@ -446,7 +446,7 @@ func (c *Coordinator) MarkFinished(args *Task, reply *Task) error {
 			if ok && meta.TaskState == Working {
 				meta.TaskState = Done
 			} else {
-				fmt.Printf("Reduce task Id[%d] is finished,already ! ! !\n", args.TaskId)
+				log.Printf("Reduce task Id[%d] is finished,already ! ! !\n", args.TaskId)
 			}
 		}
 	default:
